@@ -358,8 +358,11 @@ static void *ami_loop(void *varg)
 							end_of_response = 1;
 						}
 						/* Whether this event is the Response bit or a plain Event, some line (NOT necessarily the 2nd)
-						 * will have an ActionID, if it belongs to a response. */
-						if (strstr(nextevent, "ActionID:")) {
+						 * will have an ActionID, if it belongs to a response.
+						 *
+						 * An edge case here is async Originate actions, which result in an async OriginateResponse later
+						 * with the same action ID. We don't want to get confused and think a response is pending at this point. */
+						if (strstr(nextevent, "ActionID:") && response_pending) {
 							middle_of_response = 1;
 						}
 					}
