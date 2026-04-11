@@ -145,26 +145,32 @@ static int maxwaitms = AMI_MAX_WAIT_TIME;
 static void *ami_event_dispatch(void *varg);
 static void ami_event_handle(struct ami_session *ami, char *data);
 
+#define CLOSE(fd) close(fd); fd = -1;
+
 static void close_pipes(struct ami_session *ami)
 {
-	close(ami->ami_pipe[1]);
-	close(ami->ami_read_pipe[1]);
-	close(ami->ami_event_pipe[1]);
+	CLOSE(ami->ami_pipe[1]);
+	CLOSE(ami->ami_read_pipe[1]);
+	CLOSE(ami->ami_event_pipe[1]);
 
-	close(ami->ami_pipe[0]);
-	close(ami->ami_read_pipe[0]);
-	close(ami->ami_event_pipe[0]);
+	CLOSE(ami->ami_pipe[0]);
+	CLOSE(ami->ami_read_pipe[0]);
+	CLOSE(ami->ami_event_pipe[0]);
 }
 
 static void ami_cleanup(struct ami_session *ami)
 {
-	close_pipes(ami);
+	/* ami_cleanup is called from both ami_disconnect and ami_loop,
+	 * so we ensure not to close the pipes twice. */
+	if (ami->ami_event_pipe[0] != -1) {
+		close_pipes(ami);
+	}
 
 	/* Close read/write file descriptor, if it's the same.
 	 * If they are different, that means the application passed us file descriptors to use,
 	 * and we don't touch those. */
 	if (ami->ami_wfd == ami->ami_rfd && ami->ami_rfd != -1) {
-		close(ami->ami_rfd);
+		CLOSE(ami->ami_rfd);
 		ami->ami_rfd = -1;
 		ami->ami_wfd = -1;
 	}
@@ -503,7 +509,7 @@ static int common_init(struct ami_session *ami)
 	pthread_mutex_init(&ami->ami_read_lock, NULL);
 	pthread_mutex_lock(&ami->ami_read_lock);
 
-#define CLOSE_PIPE_PAIR(pipepair) close(pipepair[0]); close(pipepair[1]);
+#define CLOSE_PIPE_PAIR(pipepair) CLOSE(pipepair[0]); CLOSE(pipepair[1]);
 
 	/* If we can't make a pipe, forget about the socket. */
 	if (socketpair(AF_LOCAL, SOCK_STREAM, 0, ami->ami_pipe)) {
